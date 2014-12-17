@@ -1,0 +1,66 @@
+<html>
+<body>
+<h2>Question</h2>
+
+<div>
+    <b>
+    {{ question.title|escape }}
+    </b>
+	<hr>
+	<form action="/votequestion" method="post">
+        <input type="hidden" name="questionid" value={{ questionid|escape }}>
+    	<input type="radio" name=votequestion value="Up">Vote Question Up<br>
+    	<input type="radio" name=votequestion value="Down">Vote Question Down<br>
+        <input type="submit" value="Vote"></form>
+    </form>
+    Total vote count 
+    <label>{{ question.numvote }}</label> 
+</div>
+<br>
+{{ question.content|escape }}
+<br>
+tags
+<br>
+{% for tag in question.tags %}
+    {{ tag|escape }}
+{% endfor %}
+<br>
+last modified at
+<small>[<i>{{ question.date_modification.ctime }}</i>]</small>
+created at
+<small>[<i>{{ question.date_create.ctime }}</i>]</small>
+author
+<b>
+    <code>{{ question.author }}</code>
+</b>
+<br>
+
+<br>
+<h2>Answers</h2>
+{% for answer in answers %}
+    <br>
+    {{ answer.content|escape }}
+    <br>
+     <div>
+        <form action="/voteanswer" method="POST">
+        	<input type="radio" name=voteanswer value="Up">Vote Answer Up<br>
+        	<input type="radio" name=voteanswer value=Downp">Vote Answer Down<br>
+        </form>
+        Total vote count
+        <label>{{ question.numvote }}</label> 
+    </div>
+    <br>
+    last modified at
+    <small>[<i>{{ answer.date_modification.ctime }}</i>]</small>
+    created at
+    <small>[<i>{{ answer.date_create.ctime }}</i>]</small>
+    author
+    <b>
+    <code>{{ answer.author }}</code>
+    </b>
+
+{% endfor %}
+</body>
+</html>
+
+

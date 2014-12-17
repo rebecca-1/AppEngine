@@ -1,0 +1,34 @@
+<html>
+<body>
+<h2>Questions</h2>
+
+{% for question in questions %}
+    <b>
+    <a href="/detaillist?questionid={{ question.key.id }}"> {{ question.title|escape }} </a>
+    </b>
+    <br>
+    Total vote count
+    <label>{{ question.numvote }}</label> 
+    <br>
+    {{ question.shortcontent|escape }}
+    <br>
+    tags
+    <br>
+    {% for tag in question.tags %}
+        {{ tag|escape }}
+    {% endfor %}
+    <br>
+    last modified at
+    <small>[<i>{{ question.date_modification.ctime }}</i>]</small>
+    created at
+    <small>[<i>{{ question.date_create.ctime }}</i>]</small>
+    author
+    <b>
+        <code>{{ question.author }}</code>
+    </b>
+    <br>
+{% endfor %}
+</body>
+</html>
+
+
