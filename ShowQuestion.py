@@ -138,8 +138,7 @@ class QuestionAnswerList(webapp2.RequestHandler):
         question_key = questionIdToKey(questionid)
         # logging.info('questionkey in QuestionAnswerList is {}'.format(question_key))
         question = question_key.get()
-
-        logging.info('question vote is {}'.format(question.numvote))
+        # logging.info('question vote is {}'.format(question.numvote))
         
         # no restriction on number of answers to display
         answers = Answer.query(ancestor=question_key).order(-Answer.date_modification).fetch()
@@ -151,7 +150,7 @@ class QuestionAnswerList(webapp2.RequestHandler):
             'login':        users.create_login_url(self.request.uri),
             'logout':       users.create_logout_url(self.request.uri),
             'question':     question,
-            'questionid':   questionid,
+            # 'questionid':   questionid,  => directly use question.key.id instead passing in
             'answers':      answers,
         }   
         tmpl = os.path.join(os.path.dirname(__file__), 'questionanswer.html')
@@ -279,13 +278,14 @@ class VoteQuestionHandler(webapp2.RequestHandler):
         if users.get_current_user():
             currentauthor = users.get_current_user()
         else:
-            currentauthor = DEFAULT_AUTHOR
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'                      
+            self.response.write(LOGIN_TEMPLATE % (url, url_linktext)) 
+            return
             
-        logging.info('currentauthor is {}'.format(currentauthor))            
+        # logging.info('currentauthor is {}'.format(currentauthor))            
             
-            
-        thisvote = self.request.get('votequestion')
-        
+        thisvote = self.request.get('votequestion')        
         if(thisvote=="Up"):
             currentvote = 1
         elif(thisvote=="Down"):
@@ -344,17 +344,18 @@ class VoteAnswerHandler(webapp2.RequestHandler):
     def post(self):
         questionid = self.request.get('questionid')
         answerid = self.request.get('answerid')
+        # logging.info('questionid is {} answer id is {}'.format(questionid,answerid)) 
         answer_key = answerIdToKey(answerid,questionid)
         answer = answer_key.get()       
-        
-        logging.info('VOTEAH: got answer')
-        logging.info('author {}'.format(answer.author))
-        logging.info('content {}'.format(answer.content))
-        logging.info('votedauthors {}'.format(answer.votedauthors))
-        logging.info('votedauthorsvotes {}'.format(answer.votedauthorsvotes))
-        logging.info('numvoteup {}'.format(answer.numvoteup))
-        logging.info('numvotedown {}'.format(answer.numvotedown))
-        logging.info('numvote {}'.format(answer.numvote))
+ 
+        #logging.info('VOTEAH: got answer')
+        #logging.info('author {}'.format(answer.author))
+        #logging.info('content {}'.format(answer.content))
+        #logging.info('votedauthors {}'.format(answer.votedauthors))
+        #logging.info('votedauthorsvotes {}'.format(answer.votedauthorsvotes))
+        #logging.info('numvoteup {}'.format(answer.numvoteup))
+        #logging.info('numvotedown {}'.format(answer.numvotedown))
+        #logging.info('numvote {}'.format(answer.numvote))
         
         # search through vote authors to make sure no multiple voting from same author!
         if users.get_current_user():
@@ -362,11 +363,9 @@ class VoteAnswerHandler(webapp2.RequestHandler):
         else:
             currentauthor = DEFAULT_AUTHOR
             
-        logging.info('currentauthor is {}'.format(currentauthor))            
-            
+        # logging.info('currentauthor is {}'.format(currentauthor))            
             
         thisvote = self.request.get('voteanswer')
-        
         if(thisvote=="Up"):
             currentvote = 1
         elif(thisvote=="Down"):
@@ -377,15 +376,15 @@ class VoteAnswerHandler(webapp2.RequestHandler):
         assert(len(answer.votedauthors)==len(answer.votedauthorsvotes))
         counter = 0
         for prevauthor,prevvote in zip(answer.votedauthors,answer.votedauthorsvotes):
-            logging.info('inside loop')
-            logging.info('prevauthor is {}, currentauthor is {}'.format(prevauthor,currentauthor))
-            logging.info('prevauthor == currentauthor is {}'.format(str(prevauthor)==str(currentauthor)))
+            # logging.info('inside loop')
+            # logging.info('prevauthor is {}, currentauthor is {}'.format(prevauthor,currentauthor))
+            # logging.info('prevauthor == currentauthor is {}'.format(str(prevauthor)==str(currentauthor)))
             if(str(prevauthor)==str(currentauthor)):
-                logging.info('indeed prevauthor == currentauthor is {}'.format(str(prevauthor)==str(currentauthor)))
-                logging.info('prevvote is {}, currentvote is {}'.format(prevvote,currentvote))
-                logging.info('prevvote == currentvote is {}'.format(int(prevvote)==int(currentvote)))
+                # logging.info('indeed prevauthor == currentauthor is {}'.format(str(prevauthor)==str(currentauthor)))
+                # logging.info('prevvote is {}, currentvote is {}'.format(prevvote,currentvote))
+                # logging.info('prevvote == currentvote is {}'.format(int(prevvote)==int(currentvote)))
                 if(int(prevvote)==int(currentvote)):
-                    logging.info('indeed prevvote == currentvote is {}'.format(int(prevvote)==int(currentvote)))
+                    # logging.info('indeed prevvote == currentvote is {}'.format(int(prevvote)==int(currentvote)))
                     answer.put()
                     self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
                     return
@@ -404,19 +403,108 @@ class VoteAnswerHandler(webapp2.RequestHandler):
         answer.numvoteup += (currentvote>0)*currentvote
         answer.numvotedown -= (currentvote<0)*currentvote
         
-        logging.info('VOTEAH: got answer')
-        logging.info('author {}'.format(answer.author))
-        logging.info('content {}'.format(answer.content))
-        logging.info('votedauthors {}'.format(answer.votedauthors))
-        logging.info('votedauthorsvotes {}'.format(answer.votedauthorsvotes))
-        logging.info('numvoteup {}'.format(answer.numvoteup))
-        logging.info('numvotedown {}'.format(answer.numvotedown))
-        logging.info('numvote {}'.format(answer.numvote))
+        #logging.info('VOTEAH: got answer - updated')
+        #logging.info('author {}'.format(answer.author))
+        #logging.info('content {}'.format(answer.content))
+        #logging.info('votedauthors {}'.format(answer.votedauthors))
+        #logging.info('votedauthorsvotes {}'.format(answer.votedauthorsvotes))
+        #logging.info('numvoteup {}'.format(answer.numvoteup))
+        #logging.info('numvotedown {}'.format(answer.numvotedown))
+        #logging.info('numvote {}'.format(answer.numvote))
         
         answer.put()
+        # logging.info('in VoteAnswerHandler, ready to redirect!')
+        self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+
+
+class EditQuestionHandler(webapp2.RequestHandler):
+    def post(self):
+        questionid = self.request.get('questionid')
+        question_key = questionIdToKey(questionid)
+        question = question_key.get()       
         
+        logging.info('EditQ: got question')
+        logging.info('author {}'.format(question.author))
+        logging.info('title {}'.format(question.title))
+        logging.info('content {}'.format(question.content))
+        logging.info('shortcontent {}'.format(question.shortcontent))
+        logging.info('date_create {}'.format(question.date_create))
+        logging.info('date_modification {}'.format(question.date_modification))
+        logging.info('tags {}'.format(question.tags))
+
+        # search through vote authors to make sure no multiple voting from same author!
+        if users.get_current_user():
+            currentauthor = users.get_current_user()
+        else:
+            currentauthor = DEFAULT_AUTHOR
+            
+        logging.info('currentauthor is {}'.format(currentauthor))
+        
+        # not allowed to modify the question is the author is not the author who asked the question            
+        if(str(question.author)!=str(currentauthor)):
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            return    
+        else:
+            # same author:
+
+                
+            #@@@@@                
+                
+                
+            logging.info('EditQ: updated question')
+            logging.info('author {}'.format(question.author))
+            logging.info('title {}'.format(question.title))
+            logging.info('content {}'.format(question.content))
+            logging.info('shortcontent {}'.format(question.shortcontent))
+            logging.info('date_create {}'.format(question.date_create))
+            logging.info('date_modification {}'.format(question.date_modification))
+            logging.info('tags {}'.format(question.tags))
+    
+            question.put()
+            
+            logging.info('in EditQuestionHandler, ready to redirect!')
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+
+
+class EditAnswerHandler(webapp2.RequestHandler):
+    def post(self):
+        questionid = self.request.get('questionid')
+        answerid = self.request.get('answerid')
+        # logging.info('questionid is {} answer id is {}'.format(questionid,answerid)) 
+        answer_key = answerIdToKey(answerid,questionid)
+        answer = answer_key.get()       
+ 
+        logging.info('EditAnswerH: got answer')
+        logging.info('author {}'.format(answer.author))
+        logging.info('content {}'.format(answer.content))
+        logging.info('date_create {}'.format(answer.date_create))
+        logging.info('date_modification {}'.format(answer.date_modification))
+    
+        # search through vote authors to make sure no multiple voting from same author!
+        if users.get_current_user():
+            currentauthor = users.get_current_user()
+        else:
+            currentauthor = DEFAULT_AUTHOR
+            
+        logging.info('currentauthor is {}'.format(currentauthor))            
+            
+        # not allowed to modify the question is the author is not the author who asked the question            
+        if(str(answer.author)!=str(currentauthor)):
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            return    
+        else:
+            # same author:
+
+            #@@@@@
+
+            logging.info('VOTEAH: got answer - updated')
+            logging.info('author {}'.format(answer.author))
+            logging.info('content {}'.format(answer.content))
+            logging.info('date_create {}'.format(answer.date_create))
+            logging.info('date_modification {}'.format(answer.date_modification))
+            
+        answer.put()
         logging.info('in VoteAnswerHandler, ready to redirect!')
-        
         self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
 
 
@@ -479,6 +567,7 @@ class QuestionHandler(webapp2.RequestHandler):
         self.redirect('/')
         # Note: to see the most recent question, need to refresh the webpage
                 
+                             
 application = webapp2.WSGIApplication(
     [
         ('/', MainHandler),
@@ -486,7 +575,9 @@ application = webapp2.WSGIApplication(
         ('/question', QuestionHandler),
         ('/answer', AnswerHandler),
         ('/votequestion', VoteQuestionHandler),
+        ('/editquestion',EditQuestionHandler),
         ('/voteanswer', VoteAnswerHandler),
+        ('/editanswer',EditAnswerHandler),
         ('/summarylist.*',QuestionList),
         ('/detaillist.*',QuestionAnswerList),
     ], debug=True)

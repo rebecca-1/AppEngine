@@ -8,7 +8,7 @@
     </b>
 	<hr>
 	<form action="/votequestion" method="post">
-        <input type="hidden" name="questionid" value={{ questionid|escape }}>
+        <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
     	<input type="radio" name=votequestion value="Up">Vote Question Up<br>
     	<input type="radio" name=votequestion value="Down">Vote Question Down<br>
         <input type="submit" value="Vote"></form>
@@ -34,7 +34,14 @@ author
     <code>{{ question.author }}</code>
 </b>
 <br>
+<form action="/editquestion" method="post">
+    <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
+    <input type="submit" value="Edit question"></form>
+</form>
+<br>
 
+
+<br>
 <br>
 <h2>Answers</h2>
 {% for answer in answers %}
@@ -43,11 +50,14 @@ author
     <br>
      <div>
         <form action="/voteanswer" method="POST">
+            <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
+            <input type="hidden" name="answerid" value={{ answer.key.id|escape }}>            
         	<input type="radio" name=voteanswer value="Up">Vote Answer Up<br>
-        	<input type="radio" name=voteanswer value=Downp">Vote Answer Down<br>
+        	<input type="radio" name=voteanswer value="Down">Vote Answer Down<br>
+            <input type="submit" value="Vote"></form>
         </form>
         Total vote count
-        <label>{{ question.numvote }}</label> 
+        <label>{{ answer.numvote }}</label> 
     </div>
     <br>
     last modified at
@@ -56,8 +66,14 @@ author
     <small>[<i>{{ answer.date_create.ctime }}</i>]</small>
     author
     <b>
-    <code>{{ answer.author }}</code>
+        <code>{{ answer.author }}</code>
     </b>
+    <br>
+    <form action="/editanswer" method="post">
+        <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
+        <input type="hidden" name="answerid" value={{ answer.key.id|escape }}>
+        <input type="submit" value="Edit answer"></form>
+    </form>
 
 {% endfor %}
 </body>
