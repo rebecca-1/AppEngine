@@ -20,3 +20,9 @@ indexes:
   ancestor: yes
   properties:
   - name: numvote
+
+- kind: Question
+  properties:
+  - name: tags
+  - name: date_modification
+    direction: desc

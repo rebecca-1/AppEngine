@@ -20,4 +20,8 @@ libraries:
 - name: webapp2
   version: latest
 
+inbound_services:
+- mail
+
+
 

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="0.92">
+{% autoescape off %}
+<feed>
+    <title>{{question.title}}</title>
+    <link>http://molten-goal-798.appspot.com/detaillist?questionid={{question.key.id}}</link>
+    <description>{{question.content}}</description>
+
+{% for answer in answers%}
+<item>
+<link>http://molten-goal-798.appspot.com/detaillist?questionid={{question.key.id}}</link>
+<description>{{answer.content}}</description>
+</item>
+{% endfor %}
+{% endautoescape %}
+
+</feed>
+</rss>

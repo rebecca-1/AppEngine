@@ -4,13 +4,18 @@ import logging
 import urllib
 from google.appengine.api import memcache, users
 from google.appengine.datastore.datastore_query import Cursor
+from google.appengine.ext import blobstore
+from google.appengine.ext.webapp import blobstore_handlers
 from google.appengine.ext import ndb
 from google.appengine.ext.webapp import template
 import webapp2
+from google.appengine.api import mail
+from google.appengine.api import images
+# import PyRSS2Gen
 
-NUMQUESTIONPERPAGE = 10
+NUMQUESTIONPERPAGE = 3 # 10
 SHORTCONTENTLEN = 10 # 500
-DEFAULT_AUTHOR = "DEFAULT_AUTHOR" # after careful implementation, this should NEVER be used!
+# DEFAULT_AUTHOR = "DEFAULT_AUTHOR" # after careful implementation, this should NEVER be used!
 
 ##################################################################################################################################################
 
@@ -25,30 +30,41 @@ class Answer(ndb.Model):
     author = ndb.UserProperty()
     content = ndb.TextProperty(indexed=False)
     date_create = ndb.DateTimeProperty(auto_now_add=True)
-    date_modification = ndb.DateTimeProperty(auto_now=True)
-    #
+    # Note: when auto_now_add is set to True, the time is set to the current time the first time the
+    #       model instance is stored in the datastore, unless the property has already been assigned a value
+    date_modification = ndb.DateTimeProperty(auto_now=True) 
+    # Note: when auto_now is set to True, the time is set to the current time whenever the 
+    #       model instance is stored in the datastore, overwriting the property's previous value
     votedauthors = ndb.StringProperty(indexed=False,repeated=True)
     votedauthorsvotes = ndb.IntegerProperty(repeated=True)
     numvoteup = ndb.IntegerProperty(default=0)
     numvotedown = ndb.IntegerProperty(default=0)
     numvote = ndb.ComputedProperty(lambda self: self.numvoteup - self.numvotedown)
+    #
+    image = ndb.BlobKeyProperty(indexed=False)
+    imageurl = ndb.StringProperty()
 
 class Question(ndb.Model):
     # key = ndb.KeyProperty()
     author = ndb.UserProperty()
+    getemail = ndb.BooleanProperty()
     title = ndb.StringProperty(indexed=False)
     content = ndb.TextProperty(indexed=False) 
     shortcontent = ndb.TextProperty(indexed=False)
     date_create = ndb.DateTimeProperty(auto_now_add=True)
     date_modification = ndb.DateTimeProperty(auto_now=True)
     tags = ndb.StringProperty(repeated=True)
+    unparsedtags = ndb.StringProperty(indexed=False)
     #
     votedauthors = ndb.StringProperty(indexed=False,repeated=True)
     votedauthorsvotes = ndb.IntegerProperty(repeated=True)
     numvoteup = ndb.IntegerProperty(default=0)
     numvotedown = ndb.IntegerProperty(default=0)
     numvote = ndb.ComputedProperty(lambda self: self.numvoteup - self.numvotedown)
-
+    #
+    image = ndb.BlobKeyProperty(indexed=False)
+    imageurl = ndb.StringProperty()
+    
 # Remove whatever is lingering around in the database
 ndb.delete_multi(Answer.query().fetch(keys_only=True))	 	
 ndb.delete_multi(Question.query().fetch(keys_only=True))
@@ -64,6 +80,7 @@ LOGIN_TEMPLATE = """\
 </html>
 """
 
+
 HOMEBUTTON_TEMPLATE = """\
 <html>
   <body>
@@ -73,6 +90,30 @@ HOMEBUTTON_TEMPLATE = """\
   </body>
 </html>
 """
+
+
+SEARCHTAG_TEMPLATE = """\
+<html>
+  <body>
+    <form action="/" method="post">
+      <div><textarea name="querytag" rows="1" cols="20"></textarea></div>  
+      <div><input type="submit" value="Search questions with tag" />
+    </form>
+  </body>
+</html>
+"""
+
+SEARCHWORD_TEMPLATE = """\
+<html>
+  <body>
+    <form action="/" method="post">
+      <div><textarea name="queryword" rows="1" cols="20"></textarea></div>  
+      <div><input type="submit" value="Search questions and answers with key word" />
+    </form>
+  </body>
+</html>
+"""
+
 
 ASKQUESTIONBUTTON_TEMPLATE = """\
 <html>
@@ -86,21 +127,69 @@ ASKQUESTIONBUTTON_TEMPLATE = """\
 </html>
 """
 
+
 QUESTION_TEMPLATE = """\
 <html>
   <body>
-    <form action="/question" method="post">
+    <form action="/question" method="post" enctype="multipart/form-data">
       <label>Title</label>
       <div><textarea name="title" rows="1" cols="60"></textarea></div>
       <label>Question Content</label>
       <div><textarea name="content" rows="3" cols="60"></textarea></div>
+      <br>
       <label>Tags: optional, please separate multiple tags with ';'</label>
       <div><textarea name="tags",rows="1",cols="60"></textarea></div>
+      <input type="checkbox" name="emailanswer" value="emailanswer">Receive answers via email
+      <br>
+      <input type="checkbox" name="ifuploadimage" value="ifuploadimage">Upload image after sumbit question
+      <br>
       <div><input type="submit" value="Post the question"></div>
     </form>
   </body>
 </html>
 """
+
+
+QUESTIONIMAGE_TEMPLATE = """\
+<html>
+  <body>
+    <form action="%s" method="post" enctype="multipart/form-data">  
+      <input type="hidden" name="questionid" value="%s">  
+      <label>Upload image</label>
+      <input type = "file" name = "image">
+      <div><input type="submit" name="submit" value="Upload image"></div>
+    </form>
+  </body>
+</html>
+"""
+
+
+EDITQUESTION_TEMPLATE = """\
+<html>
+  <body>
+    <form action="/editquestion" method="post">
+      <input type="hidden" name="questionid" value="%s">  
+      <label>Title</label>
+      <div><textarea name="title" rows="1" cols="60">
+           %s     
+           </textarea></div>
+      <label>Question Content</label>
+      <div><textarea name="content" rows="3" cols="60">
+           %s
+           </textarea></div>
+      <label>Tags: optional, please separate multiple tags with ';'</label>
+      <div><textarea name="tags",rows="1",cols="60">
+           %s
+           </textarea></div>
+      <input type="checkbox" name="emailanswer" value="emailanswer">Receive answers via email
+      <br>
+      <input type="checkbox" name="ifuploadimage" value="ifuploadimage">Upload image after sumbit question      
+      <div><input type="submit" value="Edit the question"></div>  
+    </form>
+  </body>
+</html>
+"""
+
 
 ANSWERQUESTIONBUTTON_TEMPLATE = """\
 <html>
@@ -114,6 +203,7 @@ ANSWERQUESTIONBUTTON_TEMPLATE = """\
 </html>
 """
 
+
 ANSWER_TEMPLATE = """\
 <html>
   <body>
@@ -121,11 +211,48 @@ ANSWER_TEMPLATE = """\
       <input type="hidden" name="questionid" value="%s">
       <label>Your answer</label>
       <div><textarea name="content" rows="3" cols="60"></textarea></div>
+      <br>
+      <input type="checkbox" name="ifuploadimage" value="ifuploadimage">Upload image after sumbit answer
+      <br>
       <div><input type="submit" value="Post the answer"></div>
     </form>
   </body>
 </html>
 """
+
+
+ANSWERIMAGE_TEMPLATE = """\
+<html>
+  <body>
+    <form action="%s" method="post" enctype="multipart/form-data">  
+      <input type="hidden" name="questionid" value="%s">  
+      <input type="hidden" name="answerid" value="%s"> 
+      <label>Upload image</label>
+      <input type = "file" name = "image">
+      <div><input type="submit" name="submit" value="Upload image"></div>
+    </form>
+  </body>
+</html>
+"""
+
+
+EDITANSWER_TEMPLATE = """\
+<html>
+  <body>
+    <form action="/editanswer" method="post">
+      <input type="hidden" name="questionid" value="%s">
+      <input type="hidden" name="answerid" value="%s">
+      <label>Your answer</label>
+      <div><textarea name="content" rows="3" cols="60">
+           %s
+           </textarea></div>
+      <input type="checkbox" name="ifuploadimage" value="ifuploadimage">Upload image after sumbit answer     
+      <div><input type="submit" value="Post the answer"></div>
+    </form>
+  </body>
+</html>
+"""
+
 
 class HomeHandler(webapp2.RequestHandler):        
     def post(self):
@@ -141,7 +268,10 @@ class QuestionAnswerList(webapp2.RequestHandler):
         # logging.info('question vote is {}'.format(question.numvote))
         
         # no restriction on number of answers to display
-        answers = Answer.query(ancestor=question_key).order(-Answer.date_modification).fetch()
+        if(len(Answer.query(ancestor=question_key).fetch())<1):
+            answers = []
+        else:
+            answers = Answer.query(ancestor=question_key).order(-Answer.date_modification).fetch()
         # logging.info('len(answers) in QuestionAnswerList is {}'.format(len(answers)))
 
         memcache.add('answers', answers)
@@ -162,7 +292,7 @@ class QuestionAnswerList(webapp2.RequestHandler):
             url = users.create_login_url(self.request.uri)
             url_linktext = "Answer the question" # which will lead to login page
             self.response.write(LOGIN_TEMPLATE % (url, url_linktext))                                     
-
+    
         self.response.write(HOMEBUTTON_TEMPLATE)
 
         if users.get_current_user():
@@ -172,6 +302,7 @@ class QuestionAnswerList(webapp2.RequestHandler):
             url = users.create_login_url(self.request.uri)
             url_linktext = 'Login'                      
         self.response.write(LOGIN_TEMPLATE % (url, url_linktext)) 
+        
 
 
 # Note: duplication of codes between QuestionList and MainHandler,
@@ -209,12 +340,14 @@ class QuestionList(webapp2.RequestHandler): # Handle requests like /summarylist?
             self.response.write(LOGIN_TEMPLATE % (url, url_linktext))                                 
         
 
-
 class MainHandler(webapp2.RequestHandler):
     def get(self):
         self.response.write('debug infor for get in mainHandler <hr>')
         user = users.get_current_user()
         self.response.write('user is {} <hr>'.format(user))
+        
+        self.response.write(SEARCHTAG_TEMPLATE)
+        # self.response.write(SEARCHWORD_TEMPLATE)
         
         self.response.out.write('<html><body>')
         curs = Cursor(urlsafe=self.request.get('cursor'))
@@ -251,11 +384,81 @@ class MainHandler(webapp2.RequestHandler):
             url = users.create_login_url(self.request.uri)
             url_linktext = 'Login'                      
         self.response.write(LOGIN_TEMPLATE % (url, url_linktext))
-        
+           
     def post(self):
-        self.response.write('debug infor for post in mainHandler <hr>')
-        pass
+        # logging.info('debug infor for post in mainHandler')
+        
+        querytag = self.request.get('querytag')
+        queryword = self.request.get('queryword')
+        
+        # logging.info('querytag is {}'.format(querytag))
+        # logging.info('queryword is {}'.format(queryword))        
+        
+        #######################################################################
+        ##### if the user is querying tag
+        if(not querytag is None):
+            curs = Cursor(urlsafe=self.request.get('cursor'))
+            questions, next_curs, more = Question.query(Question.tags.IN([str(querytag)])).\
+                                              order(-Question.date_modification).\
+                                              fetch_page(NUMQUESTIONPERPAGE, start_cursor=curs)
+        #######################################################################
+        ##### if the user is querying word
+        elif(not queryword is None):                                              
+            curs = Cursor(urlsafe=self.request.get('cursor'))
+            # questions = Question.query(Question.contentword.IN([str(queryword)])).\
+            #                                   fetch(keys_only=True)
+            # answers = Answer.query(Answer.contentword.IN([str(queryword)])).\
+            #                                   fetch(keys_only=True)                                                  
+                          
+            # logging.info('questions with keys_only {}'.format(questions))
+            # logging.info('answers with keys_only {}'.format(answers))
+                          
+                          
+            #@@@@@@@@@@@@@@                                  
+            questions, next_curs, more = Question.query().\
+                                              order(-Question.date_modification).\
+                                              fetch_page(NUMQUESTIONPERPAGE, start_cursor=curs)                                              
+        #######################################################################                                              
+        else: # if both querytag and queryword are None
+            curs = Cursor(urlsafe=self.request.get('cursor'))
+            questions, next_curs, more = Question.query().\
+                                              order(-Question.date_modification).\
+                                              fetch_page(NUMQUESTIONPERPAGE, start_cursor=curs)
+            
+        self.response.out.write('<html><body>')                                                                                    
+        user = users.get_current_user()                                
+        # display all questions:        
+        memcache.add('questions', questions)
+        context = {
+            'user':      user,
+            'questions': questions,
+            'login':     users.create_login_url(self.request.uri),
+            'logout':    users.create_logout_url(self.request.uri),
+        }   
+        tmpl = os.path.join(os.path.dirname(__file__), 'allquestions.html')
+        self.response.out.write(template.render(tmpl, context))   
+                                
+        if more and next_curs:
+          self.response.out.write('<a href="/summarylist?cursor=%s">Eariler questions</a>' %
+                                  next_curs.urlsafe())
+                                  
+        if users.get_current_user():
+            self.response.write(ASKQUESTIONBUTTON_TEMPLATE)
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = "Ask a question" # which will lead to login page
+            self.response.write(LOGIN_TEMPLATE % (url, url_linktext))                                     
 
+        if users.get_current_user():
+            url = users.create_logout_url(self.request.uri)
+            url_linktext = 'Logout'
+        else:
+            url = users.create_login_url(self.request.uri)
+            url_linktext = 'Login'                      
+        self.response.write(LOGIN_TEMPLATE % (url, url_linktext))
+        
+        self.response.write(HOMEBUTTON_TEMPLATE)
+                
 
 class VoteQuestionHandler(webapp2.RequestHandler):
     def post(self):
@@ -278,11 +481,10 @@ class VoteQuestionHandler(webapp2.RequestHandler):
         if users.get_current_user():
             currentauthor = users.get_current_user()
         else:
-            url = users.create_login_url(self.request.uri)
-            url_linktext = 'Login'                      
-            self.response.write(LOGIN_TEMPLATE % (url, url_linktext)) 
+            url = users.create_login_url(dest_url='/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            self.redirect(url)
             return
-            
+
         # logging.info('currentauthor is {}'.format(currentauthor))            
             
         thisvote = self.request.get('votequestion')        
@@ -361,7 +563,9 @@ class VoteAnswerHandler(webapp2.RequestHandler):
         if users.get_current_user():
             currentauthor = users.get_current_user()
         else:
-            currentauthor = DEFAULT_AUTHOR
+            url = users.create_login_url(dest_url='/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            self.redirect(url)
+            return
             
         # logging.info('currentauthor is {}'.format(currentauthor))            
             
@@ -421,24 +625,46 @@ class EditQuestionHandler(webapp2.RequestHandler):
     def post(self):
         questionid = self.request.get('questionid')
         question_key = questionIdToKey(questionid)
+        question = question_key.get() 
+        
+        # edit the question
+        question.title = self.request.get('title')
+        question.content = self.request.get('content')
+        question.shortcontent = self.request.get('content')[:SHORTCONTENTLEN]
+        temptags = self.request.get('tags')
+        question.unparsedtags = self.request.get('tags')
+        if((not temptags is None)and(not temptags=='')):
+            question.tags = temptags.split(";")      
+        ifemailanswer = self.request.get('emailanswer')
+        if(str(ifemailanswer)=="emailanswer"):
+            question.getemail = True
+        else:
+            question.getemail = False    
+        question.put()
+        
+        ifuploadimage = self.request.get('ifuploadimage') 
+        # logging.info('ifuploadimage is {}'.format(ifuploadimage))
+        if(str(ifuploadimage)=="ifuploadimage"):
+            upload_url = blobstore.create_upload_url('/edit_question_image')
+            self.response.write(QUESTIONIMAGE_TEMPLATE % (upload_url,question.key.id()))
+        else:
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))    
+            
+
+class EditQuestionHandler_generateform(webapp2.RequestHandler):
+    def post(self):
+        questionid = self.request.get('questionid')
+        question_key = questionIdToKey(questionid)
         question = question_key.get()       
         
-        logging.info('EditQ: got question')
-        logging.info('author {}'.format(question.author))
-        logging.info('title {}'.format(question.title))
-        logging.info('content {}'.format(question.content))
-        logging.info('shortcontent {}'.format(question.shortcontent))
-        logging.info('date_create {}'.format(question.date_create))
-        logging.info('date_modification {}'.format(question.date_modification))
-        logging.info('tags {}'.format(question.tags))
-
-        # search through vote authors to make sure no multiple voting from same author!
         if users.get_current_user():
             currentauthor = users.get_current_user()
         else:
-            currentauthor = DEFAULT_AUTHOR
+            url = users.create_login_url(dest_url='/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            self.redirect(url)
+            return
             
-        logging.info('currentauthor is {}'.format(currentauthor))
+        # logging.info('currentauthor is {}'.format(currentauthor))
         
         # not allowed to modify the question is the author is not the author who asked the question            
         if(str(question.author)!=str(currentauthor)):
@@ -446,25 +672,25 @@ class EditQuestionHandler(webapp2.RequestHandler):
             return    
         else:
             # same author:
-
-                
-            #@@@@@                
-                
-                
-            logging.info('EditQ: updated question')
-            logging.info('author {}'.format(question.author))
-            logging.info('title {}'.format(question.title))
-            logging.info('content {}'.format(question.content))
-            logging.info('shortcontent {}'.format(question.shortcontent))
-            logging.info('date_create {}'.format(question.date_create))
-            logging.info('date_modification {}'.format(question.date_modification))
-            logging.info('tags {}'.format(question.tags))
-    
-            question.put()
+            self.response.write(EDITQUESTION_TEMPLATE % (
+                    questionid, question.title, question.content, question.unparsedtags ))
             
-            logging.info('in EditQuestionHandler, ready to redirect!')
-            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
-
+            
+class RemoveQuestionHandler(webapp2.RequestHandler):
+    def post(self):
+        questionid = self.request.get('questionid')
+        question_key = questionIdToKey(questionid)
+        # question = question_key.get() 
+        
+        if(users.get_current_user() and users.is_current_user_admin()):
+            question_key.delete()
+            # after removing the question, go back to home since the question does not exist anymore
+            self.redirect('/') 
+        else:
+            url = users.create_login_url(dest_url='/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            self.redirect(url)
+            return
+            
 
 class EditAnswerHandler(webapp2.RequestHandler):
     def post(self):
@@ -473,41 +699,90 @@ class EditAnswerHandler(webapp2.RequestHandler):
         # logging.info('questionid is {} answer id is {}'.format(questionid,answerid)) 
         answer_key = answerIdToKey(answerid,questionid)
         answer = answer_key.get()       
+        
+        #logging.info('EditAnswerH: got answer')
+        #logging.info('author {}'.format(answer.author))
+        #logging.info('content {}'.format(answer.content))
+        #logging.info('date_create {}'.format(answer.date_create))
+        #logging.info('date_modification {}'.format(answer.date_modification))
+        
+        # edit the answer
+        
+        answer.content = self.request.get('content')
+        
+        answer.put()
+        
+        #logging.info('EditAnswerH: got answer - updated')
+        #logging.info('author {}'.format(answer.author))
+        #logging.info('content {}'.format(answer.content))
+        #logging.info('date_create {}'.format(answer.date_create))
+        #logging.info('date_modification {}'.format(answer.date_modification))        
+        
+        question_key = questionIdToKey(questionid)
+        question = question_key.get()
+        sendemail = question.getemail
+        # logging.info('sendemail in EditAnswerHandler is {}'.format(sendemail)) 
+        to_addr = question.author.email()
+        if((mail.is_email_valid(to_addr)) and (sendemail)):
+            message = mail.EmailMessage()
+            message.sender = question.author.email()
+            message.to = to_addr
+            message.body = """
+                            Your posted question %s is recently answered: %s
+                           """ % (question.title, answer.content)
+            message.send()        
+          
+        ifuploadimage = self.request.get('ifuploadimage') 
+        # logging.info('ifuploadimage is {}'.format(ifuploadimage))
+        if(str(ifuploadimage)=="ifuploadimage"):
+            upload_url = blobstore.create_upload_url('/upload_answer_image')
+            self.response.write(ANSWERIMAGE_TEMPLATE % (upload_url,questionid,answer.key.id()))
+        else:
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))        
+                
+          
+class EditAnswerHandler_generateform(webapp2.RequestHandler):
+    def post(self):
+        questionid = self.request.get('questionid')
+        answerid = self.request.get('answerid')
+        # logging.info('questionid is {} answer id is {}'.format(questionid,answerid)) 
+        answer_key = answerIdToKey(answerid,questionid)
+        answer = answer_key.get()       
  
-        logging.info('EditAnswerH: got answer')
-        logging.info('author {}'.format(answer.author))
-        logging.info('content {}'.format(answer.content))
-        logging.info('date_create {}'.format(answer.date_create))
-        logging.info('date_modification {}'.format(answer.date_modification))
-    
         # search through vote authors to make sure no multiple voting from same author!
         if users.get_current_user():
             currentauthor = users.get_current_user()
         else:
-            currentauthor = DEFAULT_AUTHOR
+            url = users.create_login_url(dest_url='/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            self.redirect(url)
+            return
             
-        logging.info('currentauthor is {}'.format(currentauthor))            
+        # logging.info('currentauthor is {}'.format(currentauthor))            
             
         # not allowed to modify the question is the author is not the author who asked the question            
         if(str(answer.author)!=str(currentauthor)):
             self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
             return    
         else:
-            # same author:
+            # same author
+            self.response.write(EDITANSWER_TEMPLATE % (questionid, answerid, answer.content ))
 
-            #@@@@@
 
-            logging.info('VOTEAH: got answer - updated')
-            logging.info('author {}'.format(answer.author))
-            logging.info('content {}'.format(answer.content))
-            logging.info('date_create {}'.format(answer.date_create))
-            logging.info('date_modification {}'.format(answer.date_modification))
+class RemoveAnswerHandler(webapp2.RequestHandler):
+    def post(self):
+        questionid = self.request.get('questionid')
+        answerid = self.request.get('answerid')
+        # logging.info('questionid is {} answer id is {}'.format(questionid,answerid)) 
+        answer_key = answerIdToKey(answerid,questionid)
+   
+        if(users.get_current_user() and users.is_current_user_admin()):
+            answer_key.delete()
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+        else:
+            url = users.create_login_url(dest_url='/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            self.redirect(url)
+            return
             
-        answer.put()
-        logging.info('in VoteAnswerHandler, ready to redirect!')
-        self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
-
-
 
 class AnswerHandler(webapp2.RequestHandler):
     """
@@ -521,6 +796,7 @@ class AnswerHandler(webapp2.RequestHandler):
         questionid = self.request.get('questionid')        
         # logging.info('questionid is {}'.format(questionid))  
         question_key = questionIdToKey(questionid)
+        question = question_key.get()
         # logging.info('questionkey is {}'.format(question_key))
         answer = Answer(parent=question_key)
         if users.get_current_user():
@@ -535,9 +811,30 @@ class AnswerHandler(webapp2.RequestHandler):
         # logging.info('content of the answer is {}'.format(answer.content))
         if(not answer.content is None):
             answer.put()
-        self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+            
+        # if the question author chose to receive emails, send the email:
+        sendemail = question.getemail
+        # logging.info('sendemail in AnswerHandler is {}'.format(sendemail)) 
+        to_addr = question.author.email()
+        if((mail.is_email_valid(to_addr)) and (sendemail)):
+            message = mail.EmailMessage()
+            message.sender = question.author.email()
+            message.to = to_addr
+            message.body = """
+                            Your posted question %s is recently answered: %s
+                           """ % (question.title, answer.content)
+            message.send()
+            
+        ifuploadimage = self.request.get('ifuploadimage') 
+        # logging.info('ifuploadimage is {}'.format(ifuploadimage))
+        if(str(ifuploadimage)=="ifuploadimage"):
+            upload_url = blobstore.create_upload_url('/upload_answer_image')
+            self.response.write(ANSWERIMAGE_TEMPLATE % (upload_url,questionid,answer.key.id()))
+        else:
+            self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
         # or can just back to home self.redirect('/')        
-  
+
+
 class QuestionHandler(webapp2.RequestHandler):
     """
     """
@@ -552,9 +849,19 @@ class QuestionHandler(webapp2.RequestHandler):
         question.title = self.request.get('title')
         question.content = self.request.get('content')
         question.shortcontent = self.request.get('content')[:SHORTCONTENTLEN]
+       
         temptags = self.request.get('tags')
+        question.unparsedtags = self.request.get('tags')
         if((not temptags is None)and(not temptags=='')):
             question.tags = temptags.split(";")
+            
+        ifemailanswer = self.request.get('emailanswer')
+        if(str(ifemailanswer)=="emailanswer"):
+            question.getemail = True
+        else:
+            question.getemail = False
+        
+        # logging.info('getemail has value {}'.format(question.getemail))
             
         # create the corresponding vote for this question:
         question.votedauthors = []
@@ -564,22 +871,114 @@ class QuestionHandler(webapp2.RequestHandler):
         # only keep valid questions!
         if(not ((question.title is None)and(question.content is None))):
             question.put()
-        self.redirect('/')
+        
+        ifuploadimage = self.request.get('ifuploadimage') 
+        # logging.info('ifuploadimage is {}'.format(ifuploadimage))
+        if(str(ifuploadimage)=="ifuploadimage"):
+            upload_url = blobstore.create_upload_url('/upload_question_image')
+            self.response.write(QUESTIONIMAGE_TEMPLATE % (upload_url,question.key.id()))
+        else:
+            self.redirect('/')
         # Note: to see the most recent question, need to refresh the webpage
                 
-                             
+               
+class QuestionImageUploadHandler(blobstore_handlers.BlobstoreUploadHandler):
+    def post(self):
+        upload = self.get_uploads('image')[0] 
+        # logging.info('upload is {}'.format(upload))
+        
+        questionid = self.request.get('questionid')
+        # logging.info('QuestionImageUploadH questionid is {}'.format(questionid))        
+        
+        question_key = questionIdToKey(questionid)
+        question = question_key.get()       
+        
+        question.image = upload.key()
+        question.imageurl = images.get_serving_url(upload.key())
+        
+        question.put()
+        # self.redirect(str(question.imageurl))
+        self.redirect("/")
+        
+        
+class EditQuestionImageUploadHandler(blobstore_handlers.BlobstoreUploadHandler):
+    def post(self):
+        upload = self.get_uploads('image')[0] 
+        # logging.info('upload is {}'.format(upload))
+        
+        questionid = self.request.get('questionid')
+        # logging.info('QuestionImageUploadH questionid is {}'.format(questionid))        
+        
+        question_key = questionIdToKey(questionid)
+        question = question_key.get()       
+        
+        question.image = upload.key()
+        question.imageurl = images.get_serving_url(upload.key())
+        
+        question.put()
+        # self.redirect(str(question.imageurl))
+        self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+
+
+class AnswerImageUploadHandler(blobstore_handlers.BlobstoreUploadHandler):
+    def post(self):
+        upload = self.get_uploads('image')[0] 
+
+        questionid = self.request.get('questionid')
+        answerid = self.request.get('answerid')
+        # logging.info('questionid is {} answer id is {}'.format(questionid,answerid)) 
+        answer_key = answerIdToKey(answerid,questionid)
+        answer = answer_key.get()       
+ 
+        answer.image = upload.key()
+        answer.imageurl = images.get_serving_url(upload.key())
+        
+        answer.put()
+        # self.redirect(str(question.imageurl))
+        self.redirect('/detaillist?'+  urllib.urlencode({'questionid': questionid}))
+
+
+class RSSHandler(webapp2.RequestHandler):
+    def post(self):   
+        questionid = self.request.get('questionid')
+
+        logging.info('in RSSHandler, question id is {}'.format(questionid))        
+        
+        question_key = questionIdToKey(questionid)
+        question = question_key.get()
+        if(len(Answer.query(ancestor=question_key).fetch())<1):
+            answers = []
+        else:
+            answers = Answer.query(ancestor=question_key).order(-Answer.date_modification).fetch()
+        context = {
+            'question':     question,
+            'answers':      answers,
+        }   
+        self.response.headers['Content-Type'] = 'application/rss+xml'
+        tmpl = os.path.join(os.path.dirname(__file__), 'RSS.xml')
+        self.response.out.write(template.render(tmpl, context)) 
+        
+        
 application = webapp2.WSGIApplication(
     [
         ('/', MainHandler),
         ('/home',HomeHandler),
         ('/question', QuestionHandler),
-        ('/answer', AnswerHandler),
+        ('/upload_question_image', QuestionImageUploadHandler),
+        ('/edit_question_image', EditQuestionImageUploadHandler),
         ('/votequestion', VoteQuestionHandler),
+        ('/editquestion_form',EditQuestionHandler_generateform),
         ('/editquestion',EditQuestionHandler),
+        ('/removequestion',RemoveQuestionHandler),
+        ('/answer', AnswerHandler),
+        ('/upload_answer_image', AnswerImageUploadHandler),
         ('/voteanswer', VoteAnswerHandler),
+        ('/editanswer_form',EditAnswerHandler_generateform),
         ('/editanswer',EditAnswerHandler),
+        ('/removeanswer',RemoveAnswerHandler),
         ('/summarylist.*',QuestionList),
         ('/detaillist.*',QuestionAnswerList),
+        ('/RSS',RSSHandler),
     ], debug=True)
     
         

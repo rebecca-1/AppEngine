@@ -6,6 +6,12 @@
     <b>
     {{ question.title|escape }}
     </b>
+    <br>
+    <form action="/RSS" method="post">
+        <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
+        <input type="submit" value="RSS"></form>
+    </form>
+    <br>
 	<hr>
 	<form action="/votequestion" method="post">
         <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
@@ -17,7 +23,9 @@
     <label>{{ question.numvote }}</label> 
 </div>
 <br>
-{{ question.content|escape }}
+{{ question.content|urlize }}
+<br>
+<img src={{ question.imageurl|escape }}></img>
 <br>
 tags
 <br>
@@ -34,11 +42,15 @@ author
     <code>{{ question.author }}</code>
 </b>
 <br>
-<form action="/editquestion" method="post">
+<form action="/editquestion_form" method="post">
     <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
     <input type="submit" value="Edit question"></form>
 </form>
 <br>
+<form action="/removequestion" method="post">
+    <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
+    <input type="submit" value="Admin only: remove question"></form>
+</form>
 
 
 <br>
@@ -48,6 +60,8 @@ author
     <br>
     {{ answer.content|escape }}
     <br>
+    <img src={{ answer.imageurl|escape }}></img>
+    <br> 
      <div>
         <form action="/voteanswer" method="POST">
             <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
@@ -69,13 +83,20 @@ author
         <code>{{ answer.author }}</code>
     </b>
     <br>
-    <form action="/editanswer" method="post">
+    <form action="/editanswer_form" method="post">
         <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
         <input type="hidden" name="answerid" value={{ answer.key.id|escape }}>
         <input type="submit" value="Edit answer"></form>
     </form>
 
+    <form action="/removeanswer" method="post">
+        <input type="hidden" name="questionid" value={{ question.key.id|escape }}>
+        <input type="hidden" name="answerid" value={{ answer.key.id|escape }}> 
+        <input type="submit" value="Admin only: remove answer"></form>
+    </form>
+
 {% endfor %}
+
 </body>
 </html>
 
