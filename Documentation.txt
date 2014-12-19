@@ -1,0 +1,19 @@
+Open Source Tool Final Project
+
+(A) Features
+	(1) All basic requirements fulfilled
+	(2) Bonus feature: support moderator mode, i.e., administrators can remove questions or answers
+	(3) Bones feature: the question author can select to receive email whenever there is a new answer or existing answer got edited
+	
+(B) Special Notes:
+	Questions just submitted may not show in the question list unless refresh the web page
+
+(C) Design and methods
+	(1) Use Django template
+	(2) Post question: the author first need to fill out a form that contains question title, content and optional tags. Before submitting the question, the author can check the a indicating that the author need to further upload a picture. The question author also has the choice to edit the question (including whether to receive email notification of answer, and re-uploading the image). Relevant functions are: QuestionHandler, QuestionImageUploadHandler, EditQuestionImageUploadHandler, EditQuestionHandler_generateform, EditQuestionHandler.
+
+	(3) Post answer: the author first need to fill out a form that contains the answer content. Before submitting the answer, the author can check a box indicating that the author need to further upload a picture. The answer author also has the choice to edit the answer (including re-uploading the image). Relevant functions are: AnswerHandler, AnswerImageUploadHandler, EditAnswerHandler_generateform, EditAnswerHandler.
+
+	(4) Vote: any logged in user (including question/answer author themselves) can vote questions/answers but restricted to 'one-man-one-vote'. Relevant functions are: VoteQuestionHandler, VoteAnswerHandler.
+
+

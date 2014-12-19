@@ -1,6 +1,6 @@
 
 import os
-import logging
+# import logging # used for debugging
 import urllib
 from google.appengine.api import memcache, users
 from google.appengine.datastore.datastore_query import Cursor
@@ -13,8 +13,8 @@ from google.appengine.api import mail
 from google.appengine.api import images
 # import PyRSS2Gen
 
-NUMQUESTIONPERPAGE = 3 # 10
-SHORTCONTENTLEN = 10 # 500
+NUMQUESTIONPERPAGE = 10
+SHORTCONTENTLEN = 500
 # DEFAULT_AUTHOR = "DEFAULT_AUTHOR" # after careful implementation, this should NEVER be used!
 
 ##################################################################################################################################################
@@ -413,8 +413,6 @@ class MainHandler(webapp2.RequestHandler):
             # logging.info('questions with keys_only {}'.format(questions))
             # logging.info('answers with keys_only {}'.format(answers))
                           
-                          
-            #@@@@@@@@@@@@@@                                  
             questions, next_curs, more = Question.query().\
                                               order(-Question.date_modification).\
                                               fetch_page(NUMQUESTIONPERPAGE, start_cursor=curs)                                              
@@ -942,7 +940,7 @@ class RSSHandler(webapp2.RequestHandler):
     def post(self):   
         questionid = self.request.get('questionid')
 
-        logging.info('in RSSHandler, question id is {}'.format(questionid))        
+        # logging.info('in RSSHandler, question id is {}'.format(questionid))        
         
         question_key = questionIdToKey(questionid)
         question = question_key.get()
@@ -978,7 +976,7 @@ application = webapp2.WSGIApplication(
         ('/removeanswer',RemoveAnswerHandler),
         ('/summarylist.*',QuestionList),
         ('/detaillist.*',QuestionAnswerList),
-        ('/RSS',RSSHandler),
+        # ('/RSS',RSSHandler),
     ], debug=True)
     
         
